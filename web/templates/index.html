@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Faceless Shorts — Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Faceless Shorts</h1>
+            <p class="subtitle">Automated video generator & uploader</p>
+        </header>
+
+        <!-- Quick Stats -->
+        <div class="stats-bar" id="stats-bar">
+            <div class="stat">
+                <span class="stat-value" id="total-uploads">{{ history|length }}</span>
+                <span class="stat-label">Total Uploads</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value" id="videos-count">-</span>
+                <span class="stat-label">Videos on Disk</span>
+            </div>
+        </div>
+
+        <!-- Generate from URL -->
+        <section class="card">
+            <h2>Generate from Reddit URL</h2>
+            <form id="url-form">
+                <div class="form-group">
+                    <input type="url" name="url" placeholder="https://reddit.com/r/tifu/comments/..." required>
+                </div>
+                <div class="form-group checkboxes">
+                    <label><input type="checkbox" name="platforms" value="youtube" checked> YouTube</label>
+                    <label><input type="checkbox" name="platforms" value="tiktok" checked> TikTok</label>
+                    <label><input type="checkbox" name="platforms" value="instagram" checked> Instagram</label>
+                    <label><input type="checkbox" name="no_upload"> Video only (no upload)</label>
+                </div>
+                <button type="submit" class="btn btn-primary">Generate & Upload</button>
+            </form>
+            <div id="url-result" class="result"></div>
+        </section>
+
+        <!-- Auto Generate -->
+        <section class="card">
+            <h2>Auto-Generate from Top Stories</h2>
+            <form id="auto-form">
+                <div class="form-group">
+                    <label for="count">Number of videos:</label>
+                    <input type="number" name="count" id="count" value="1" min="1" max="20">
+                </div>
+                <div class="form-group checkboxes">
+                    <label><input type="checkbox" name="platforms" value="youtube" checked> YouTube</label>
+                    <label><input type="checkbox" name="platforms" value="tiktok" checked> TikTok</label>
+                    <label><input type="checkbox" name="platforms" value="instagram" checked> Instagram</label>
+                </div>
+                <button type="submit" class="btn btn-secondary">Auto-Generate</button>
+            </form>
+            <div id="auto-result" class="result"></div>
+        </section>
+
+        <!-- Upload History -->
+        <section class="card">
+            <h2>Recent Uploads</h2>
+            <table id="history-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Subreddit</th>
+                        <th>Title</th>
+                        <th>Platforms</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in history|reverse %}
+                    <tr>
+                        <td>{{ entry.uploaded_at[:16] if entry.uploaded_at else '?' }}</td>
+                        <td>r/{{ entry.subreddit or '?' }}</td>
+                        <td>{{ entry.title[:50] if entry.title else '?' }}</td>
+                        <td>
+                            {% for p in entry.platforms or [] %}
+                                <span class="badge {{ 'badge-ok' if p.success else 'badge-fail' }}">
+                                    {{ p.platform }}
+                                </span>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4" class="empty">No uploads yet. Generate your first video above!</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.egg-info/
+dist/
+build/
+output/
+backgrounds/*.mp4
+backgrounds/*.webm
+logs/
+youtube_token.json
+client_secrets.json
+*.mp3
+*.wav
+.venv/
+venv/
