@@ -14,7 +14,7 @@ from moviepy import (
     vfx,
 )
 
-from faceless.config import BACKGROUND_DIR, FONT_SIZE, OUTPUT_DIR, VIDEO_HEIGHT, VIDEO_WIDTH
+from faceless.config import BACKGROUND_DIR, FONT, FONT_SIZE, OUTPUT_DIR, VIDEO_HEIGHT, VIDEO_WIDTH
 from faceless.tts.engine import generate_speech
 
 log = logging.getLogger(__name__)
@@ -57,7 +57,7 @@ def _make_subtitles(words: list[dict]) -> list[TextClip]:
                 text=text,
                 font_size=FONT_SIZE,
                 color="white",
-                font="Liberation-Sans-Bold",
+                font=FONT,
                 stroke_color="black",
                 stroke_width=3,
                 size=(VIDEO_WIDTH - 100, None),
@@ -92,7 +92,7 @@ def generate_video(text: str, title: str = "Untitled") -> Path:
             text=title[:80],
             font_size=FONT_SIZE + 10,
             color="yellow",
-            font="Liberation-Sans-Bold",
+            font=FONT,
             stroke_color="black",
             stroke_width=4,
             size=(VIDEO_WIDTH - 80, None),

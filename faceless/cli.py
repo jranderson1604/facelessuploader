@@ -57,6 +57,9 @@ def text(title: str, filepath: str | None):
         console.print("[bold red]No text provided.[/]")
         raise SystemExit(1)
 
+    if title == "Untitled" and "\n" in story:
+        title = story.split("\n", 1)[0].strip()
+
     path = from_text(story, title=title)
     console.print(f"\n[bold green]Done![/] Video saved to: {path}")
 
