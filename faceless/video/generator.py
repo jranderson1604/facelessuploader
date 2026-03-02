@@ -4,13 +4,14 @@ import logging
 import random
 from pathlib import Path
 
-from moviepy.editor import (
+from moviepy import (
     AudioFileClip,
     ColorClip,
     CompositeVideoClip,
     TextClip,
     VideoFileClip,
     concatenate_videoclips,
+    vfx,
 )
 
 from faceless.config import BACKGROUND_DIR, FONT_SIZE, OUTPUT_DIR, VIDEO_HEIGHT, VIDEO_WIDTH
@@ -30,12 +31,12 @@ def _get_background(duration: float) -> VideoFileClip | ColorClip:
 
     if clip.duration < duration:
         clip = concatenate_videoclips([clip] * (int(duration / clip.duration) + 1))
-    clip = clip.subclip(0, duration)
+    clip = clip.subclipped(0, duration)
 
-    clip = clip.resize(height=VIDEO_HEIGHT)
+    clip = clip.resized(height=VIDEO_HEIGHT)
     if clip.w > VIDEO_WIDTH:
         x = clip.w / 2 - VIDEO_WIDTH / 2
-        clip = clip.crop(x1=x, x2=x + VIDEO_WIDTH)
+        clip = clip.cropped(x1=x, x2=x + VIDEO_WIDTH)
 
     return clip
 
@@ -53,8 +54,8 @@ def _make_subtitles(words: list[dict]) -> list[TextClip]:
 
         txt = (
             TextClip(
-                text,
-                fontsize=FONT_SIZE,
+                text=text,
+                font_size=FONT_SIZE,
                 color="white",
                 font="Liberation-Sans-Bold",
                 stroke_color="black",
@@ -62,9 +63,9 @@ def _make_subtitles(words: list[dict]) -> list[TextClip]:
                 size=(VIDEO_WIDTH - 100, None),
                 method="caption",
             )
-            .set_position(("center", VIDEO_HEIGHT * 0.40))
-            .set_start(start)
-            .set_duration(end - start)
+            .with_position(("center", VIDEO_HEIGHT * 0.40))
+            .with_start(start)
+            .with_duration(end - start)
         )
         clips.append(txt)
     return clips
@@ -88,8 +89,8 @@ def generate_video(text: str, title: str = "Untitled") -> Path:
     # Title card
     title_clip = (
         TextClip(
-            title[:80],
-            fontsize=FONT_SIZE + 10,
+            text=title[:80],
+            font_size=FONT_SIZE + 10,
             color="yellow",
             font="Liberation-Sans-Bold",
             stroke_color="black",
@@ -97,16 +98,16 @@ def generate_video(text: str, title: str = "Untitled") -> Path:
             size=(VIDEO_WIDTH - 80, None),
             method="caption",
         )
-        .set_position(("center", VIDEO_HEIGHT * 0.15))
-        .set_start(0)
-        .set_duration(min(3.0, duration))
-        .crossfadein(0.5)
+        .with_position(("center", VIDEO_HEIGHT * 0.15))
+        .with_start(0)
+        .with_duration(min(3.0, duration))
+        .with_effects([vfx.CrossFadeIn(0.5)])
     )
 
     # Compose & render
     final = CompositeVideoClip(
         [bg, title_clip, *subs], size=(VIDEO_WIDTH, VIDEO_HEIGHT)
-    ).set_audio(audio_clip).set_duration(duration)
+    ).with_audio(audio_clip).with_duration(duration)
 
     safe_title = "".join(c if c.isalnum() or c in " -_" else "" for c in title)[:50].strip()
     output_path = OUTPUT_DIR / f"{safe_title.replace(' ', '_')}.mp4"
