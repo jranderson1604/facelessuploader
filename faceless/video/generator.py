@@ -1,8 +1,7 @@
-"""Video generator — combines background footage, TTS audio, and animated subtitles."""
+"""Video generator — background footage + TTS audio + animated subtitles."""
 
 import logging
 import random
-import tempfile
 from pathlib import Path
 
 from moviepy.editor import (
@@ -14,173 +13,82 @@ from moviepy.editor import (
     concatenate_videoclips,
 )
 
-from faceless.config import (
-    BACKGROUND_VIDEO_DIR,
-    FONT_COLOR,
-    FONT_SIZE,
-    OUTPUT_DIR,
-    VIDEO_HEIGHT,
-    VIDEO_WIDTH,
-)
-from faceless.tts.engine import generate_speech, generate_speech_with_timestamps
+from faceless.config import BACKGROUND_DIR, FONT_SIZE, OUTPUT_DIR, VIDEO_HEIGHT, VIDEO_WIDTH
+from faceless.tts.engine import generate_speech
 
 log = logging.getLogger(__name__)
 
 
-def _get_background_clip(duration: float) -> VideoFileClip | ColorClip:
-    """Pick a random background video from the backgrounds dir, or use a solid color."""
-    bg_files = list(BACKGROUND_VIDEO_DIR.glob("*.mp4")) + list(
-        BACKGROUND_VIDEO_DIR.glob("*.webm")
-    )
+def _get_background(duration: float) -> VideoFileClip | ColorClip:
+    bg_files = list(BACKGROUND_DIR.glob("*.mp4")) + list(BACKGROUND_DIR.glob("*.webm"))
 
-    if bg_files:
-        bg_path = random.choice(bg_files)
-        log.info("Using background: %s", bg_path.name)
-        clip = VideoFileClip(str(bg_path), audio=False)
+    if not bg_files:
+        log.warning("No background videos in backgrounds/ — using solid color")
+        return ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(15, 15, 25), duration=duration)
 
-        # Loop if background is shorter than needed
-        if clip.duration < duration:
-            loops_needed = int(duration / clip.duration) + 1
-            clip = concatenate_videoclips([clip] * loops_needed)
+    clip = VideoFileClip(str(random.choice(bg_files)), audio=False)
 
-        clip = clip.subclip(0, duration)
+    if clip.duration < duration:
+        clip = concatenate_videoclips([clip] * (int(duration / clip.duration) + 1))
+    clip = clip.subclip(0, duration)
 
-        # Resize to vertical short format
-        clip = clip.resize(height=VIDEO_HEIGHT)
-        w = clip.w
-        if w > VIDEO_WIDTH:
-            x_center = w / 2 - VIDEO_WIDTH / 2
-            clip = clip.crop(x1=x_center, x2=x_center + VIDEO_WIDTH)
+    clip = clip.resize(height=VIDEO_HEIGHT)
+    if clip.w > VIDEO_WIDTH:
+        x = clip.w / 2 - VIDEO_WIDTH / 2
+        clip = clip.crop(x1=x, x2=x + VIDEO_WIDTH)
 
-        return clip
-    else:
-        log.warning("No background videos found — using dark gradient")
-        return ColorClip(
-            size=(VIDEO_WIDTH, VIDEO_HEIGHT),
-            color=(15, 15, 25),
-            duration=duration,
-        )
+    return clip
 
 
-def _build_subtitle_clips(
-    words: list[dict], video_width: int, video_height: int
-) -> list[TextClip]:
-    """Create animated word-highlight subtitle clips from timestamps."""
+def _make_subtitles(words: list[dict]) -> list[TextClip]:
     clips = []
-    chunk_size = 5  # words per subtitle group
-    chunks = [words[i : i + chunk_size] for i in range(0, len(words), chunk_size)]
-
-    for chunk in chunks:
+    chunk_size = 5
+    for i in range(0, len(words), chunk_size):
+        chunk = words[i : i + chunk_size]
         if not chunk:
             continue
-
-        start_time = chunk[0]["start"]
-        end_time = chunk[-1]["start"] + chunk[-1]["duration"]
+        start = chunk[0]["start"]
+        end = chunk[-1]["start"] + chunk[-1]["duration"]
         text = " ".join(w["text"] for w in chunk)
 
-        txt_clip = (
+        txt = (
             TextClip(
                 text,
                 fontsize=FONT_SIZE,
-                color=FONT_COLOR,
+                color="white",
                 font="Liberation-Sans-Bold",
                 stroke_color="black",
                 stroke_width=3,
-                size=(video_width - 100, None),
+                size=(VIDEO_WIDTH - 100, None),
                 method="caption",
             )
-            .set_position(("center", video_height * 0.40))
-            .set_start(start_time)
-            .set_duration(end_time - start_time)
+            .set_position(("center", VIDEO_HEIGHT * 0.40))
+            .set_start(start)
+            .set_duration(end - start)
         )
-        clips.append(txt_clip)
-
+        clips.append(txt)
     return clips
 
 
-def _build_simple_subtitles(
-    text: str, audio_duration: float, video_width: int, video_height: int
-) -> list[TextClip]:
-    """Fallback: evenly-timed subtitle chunks when no timestamps available."""
-    words = text.split()
-    chunk_size = 5
-    chunks = [" ".join(words[i : i + chunk_size]) for i in range(0, len(words), chunk_size)]
-    time_per_chunk = audio_duration / len(chunks) if chunks else audio_duration
-    clips = []
+def generate_video(text: str, title: str = "Untitled") -> Path:
+    """Generate a faceless short video. Returns path to the .mp4."""
+    log.info("Generating video: %s", title[:60])
 
-    for i, chunk_text in enumerate(chunks):
-        txt_clip = (
-            TextClip(
-                chunk_text,
-                fontsize=FONT_SIZE,
-                color=FONT_COLOR,
-                font="Liberation-Sans-Bold",
-                stroke_color="black",
-                stroke_width=3,
-                size=(video_width - 100, None),
-                method="caption",
-            )
-            .set_position(("center", video_height * 0.40))
-            .set_start(i * time_per_chunk)
-            .set_duration(time_per_chunk)
-        )
-        clips.append(txt_clip)
-
-    return clips
-
-
-def generate_video(
-    text: str,
-    title: str = "Untitled",
-    output_filename: str | None = None,
-    use_timestamps: bool = True,
-) -> Path:
-    """Generate a complete faceless short video.
-
-    Args:
-        text: The story/content text to narrate.
-        title: Used for the output filename if output_filename is not set.
-        output_filename: Explicit output filename.
-        use_timestamps: Use word-level timestamps for subtitles (Edge TTS only).
-
-    Returns:
-        Path to the generated .mp4 file.
-    """
-    log.info("Generating video for: %s", title[:60])
-
-    # 1. Generate TTS audio
-    if use_timestamps:
-        try:
-            audio_path, word_timestamps = generate_speech_with_timestamps(text)
-        except Exception:
-            log.warning("Timestamp TTS failed, falling back to simple TTS")
-            audio_path = generate_speech(text)
-            word_timestamps = []
-    else:
-        audio_path = generate_speech(text)
-        word_timestamps = []
-
+    # TTS
+    audio_path, word_timestamps = generate_speech(text)
     audio_clip = AudioFileClip(str(audio_path))
-    duration = audio_clip.duration + 1.0  # add 1s padding
+    duration = audio_clip.duration + 1.0
 
-    # 2. Background video
-    bg_clip = _get_background_clip(duration)
+    # Background
+    bg = _get_background(duration)
 
-    # 3. Subtitles
-    if word_timestamps:
-        subtitle_clips = _build_subtitle_clips(
-            word_timestamps, VIDEO_WIDTH, VIDEO_HEIGHT
-        )
-    else:
-        subtitle_clips = _build_simple_subtitles(
-            text, audio_clip.duration, VIDEO_WIDTH, VIDEO_HEIGHT
-        )
+    # Subtitles
+    subs = _make_subtitles(word_timestamps)
 
-    # 4. Title card (first 3 seconds)
-    title_display = title[:80]  # truncate long titles
+    # Title card
     title_clip = (
         TextClip(
-            title_display,
+            title[:80],
             fontsize=FONT_SIZE + 10,
             color="yellow",
             font="Liberation-Sans-Bold",
@@ -195,38 +103,23 @@ def generate_video(
         .crossfadein(0.5)
     )
 
-    # 5. Compose everything
+    # Compose & render
     final = CompositeVideoClip(
-        [bg_clip, title_clip, *subtitle_clips],
-        size=(VIDEO_WIDTH, VIDEO_HEIGHT),
-    ).set_audio(audio_clip)
+        [bg, title_clip, *subs], size=(VIDEO_WIDTH, VIDEO_HEIGHT)
+    ).set_audio(audio_clip).set_duration(duration)
 
-    final = final.set_duration(duration)
+    safe_title = "".join(c if c.isalnum() or c in " -_" else "" for c in title)[:50].strip()
+    output_path = OUTPUT_DIR / f"{safe_title.replace(' ', '_')}.mp4"
 
-    # 6. Output
-    if output_filename is None:
-        safe_title = "".join(c if c.isalnum() or c in " -_" else "" for c in title)[:50]
-        output_filename = f"{safe_title.strip().replace(' ', '_')}.mp4"
-
-    output_path = OUTPUT_DIR / output_filename
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    log.info("Rendering video → %s", output_path)
+    log.info("Rendering → %s", output_path.name)
     final.write_videofile(
-        str(output_path),
-        fps=30,
-        codec="libx264",
-        audio_codec="aac",
-        preset="medium",
-        threads=4,
-        logger=None,  # suppress moviepy progress bar in logs
+        str(output_path), fps=30, codec="libx264", audio_codec="aac",
+        preset="medium", threads=4, logger=None,
     )
 
-    # Cleanup temp files
     audio_clip.close()
-    bg_clip.close()
+    bg.close()
     final.close()
 
-    file_size_mb = output_path.stat().st_size / (1024 * 1024)
-    log.info("Video complete: %s (%.1f MB)", output_path.name, file_size_mb)
+    log.info("Done: %s (%.1f MB)", output_path.name, output_path.stat().st_size / (1024 * 1024))
     return output_path
