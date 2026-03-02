@@ -15,7 +15,7 @@ async def _tts_with_timestamps(
 ) -> tuple[Path, list[dict]]:
     import edge_tts
 
-    communicate = edge_tts.Communicate(text, voice)
+    communicate = edge_tts.Communicate(text, voice, boundary="WordBoundary")
     subs: list[dict] = []
 
     with open(output_path, "wb") as f:

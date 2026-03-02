@@ -115,7 +115,7 @@ def generate_video(text: str, title: str = "Untitled") -> Path:
     log.info("Rendering → %s", output_path.name)
     final.write_videofile(
         str(output_path), fps=30, codec="libx264", audio_codec="aac",
-        preset="medium", threads=4, logger=None,
+        preset="medium", threads=4, logger="bar",
     )
 
     audio_clip.close()
