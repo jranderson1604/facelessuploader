@@ -16,7 +16,7 @@ TTS_VOICE = os.getenv("TTS_VOICE", "en-US-ChristopherNeural")
 VIDEO_WIDTH = 1080
 VIDEO_HEIGHT = 1920
 FONT_SIZE = 60
-FONT = "Arial-Bold" if os.name == "nt" else "Liberation-Sans-Bold"
+FONT = "arialbd.ttf" if os.name == "nt" else "Liberation-Sans-Bold"
 
 BACKGROUND_DIR = BASE_DIR / "backgrounds"
 OUTPUT_DIR = BASE_DIR / "output"
