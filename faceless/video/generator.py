@@ -78,7 +78,7 @@ def generate_video(text: str, title: str = "Untitled") -> Path:
     # TTS
     audio_path, word_timestamps = generate_speech(text)
     audio_clip = AudioFileClip(str(audio_path))
-    duration = audio_clip.duration + 1.0
+    duration = audio_clip.duration
 
     # Background
     bg = _get_background(duration)
